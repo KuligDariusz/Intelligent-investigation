@@ -1,5 +1,3 @@
-#!/var/ossec/framework/python/bin/python3
-# ChatGPT Integration template for PowerShell command enrichment.
 
 import json
 import sys
@@ -10,10 +8,10 @@ from socket import socket, AF_UNIX, SOCK_DGRAM
 try:
     import requests
 except ImportError:
-    print("No module 'requests' found. Install: pip install requests")
+    print("Brak modułu 'requests'. Zainstaluj: pip install requests")
     sys.exit(1)
 
-# Global variables
+# Zmienne globalne
 debug_enabled = False
 pwd = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
@@ -22,7 +20,7 @@ log_file = f"{pwd}/logs/integrations.log"
 socket_addr = f"{pwd}/queue/sockets/queue"
 
 def debug(msg):
-    """Log debug messages to file and print if enabled."""
+    
     if debug_enabled:
         msg = f"{now}: {msg}\n"
         print(msg)
@@ -30,51 +28,50 @@ def debug(msg):
         f.write(msg)
 
 def main(args):
-    """Main function to process the alert and call ChatGPT."""
-    debug("# Starting")
+    
+    debug("# Start")
     if len(args) < 3:
-        debug("# Exiting: Insufficient arguments.")
+        debug("# Zakończono: Za mało argumentów.")
         sys.exit(1)
 
     alert_file_location = args[1]
     apikey = args[2]
-    debug(f"# API Key: {apikey}")
-    debug(f"# File location: {alert_file_location}")
+    debug(f"# Klucz API: {apikey}")
+    debug(f"# Lokalizacja pliku: {alert_file_location}")
 
-    # Load alert file
+    
     try:
         with open(alert_file_location) as alert_file:
             raw_data = alert_file.read()
-            debug(f"# Raw alert data: {raw_data}")
+            debug(f"# Surowe dane alertu: {raw_data}")
             json_alert = json.loads(raw_data)
     except Exception as e:
-        debug(f"# Error loading alert file: {e}")
+        debug(f"# Błąd ładowania pliku alertu: {e}")
         sys.exit(1)
 
-
-    # Process the alert and query ChatGPT
+    
     msg = process_alert(json_alert, apikey)
     if msg:
         send_event(msg)
 
 def process_alert(alert, apikey):
-    """Extract PowerShell command and query ChatGPT."""
-    # Extract scriptBlockText
-    ps_command = alert.get("data", {}).get("win", {}).get("eventdata", {}).get("scriptBlo>
+    """Wyciąga komendę PowerShell i pyta ChatGPT."""
+    
+    ps_command = alert.get("data", {}).get("win", {}).get("eventdata", {}).get("scriptBlockText")
     if not ps_command:
-        debug("# No PowerShell command found in eventdata. Skipping alert.")
+        debug("# Brak komendy PowerShell w eventdata. Pomijam alert.")
         return None
 
-    # Log the command
-    debug(f"# Extracted PowerShell command: {ps_command}")
+    
+    debug(f"# Znaleziona komenda PowerShell: {ps_command}")
 
-    # Query ChatGPT for insights
+    
     chatgpt_response = query_chatgpt(ps_command, apikey)
     if not chatgpt_response:
-        debug("# No response from ChatGPT.")
+        debug("# Brak odpowiedzi z ChatGPT.")
         return None
 
-    # Prepare enriched alert
+    
     enriched_alert = {
         "chatgpt": {
             "found": 1,
@@ -90,50 +87,49 @@ def process_alert(alert, apikey):
         }
     }
 
-    debug(f"# Enriched alert: {json.dumps(enriched_alert, indent=4)}")
+    debug(f"# Wzbogacony alert: {json.dumps(enriched_alert, indent=4, ensure_ascii=False)}")
     return enriched_alert
 
 def query_chatgpt(ps_command, apikey):
-    """Query ChatGPT API with the PowerShell command."""
+    """Wysyła zapytanie do ChatGPT API z komendą PowerShell i oczekuje odpowiedzi po polsku."""
     headers = {
         'Authorization': f'Bearer {apikey}',
         'Content-Type': 'application/json',
-     }
+    }
 
-     payload = {
+    
+    payload = {
         'model': 'gpt-3.5-turbo',
         'messages': [
             {
                 'role': 'user',
                 'content': (
-                    f"Analyze this PowerShell command and provide insights, determine if it is malicious or benign, "
-                    f"and suggest well-formatted recommendations for mitigation or next steps: {ps_command}"
-             )
-           }
-         ]
-       }
+                    f"Przeanalizuj tę komendę PowerShell i odpowiedz po polsku: oceń czy jest złośliwa czy nie, "
+                    f"uzasadnij swoją ocenę i zaproponuj konkretne, dobrze sformatowane zalecenia co do dalszych kroków lub działań naprawczych. Komenda: {ps_command}"
+                )
+            }
+        ]
+    }
 
-
-    debug(f"# ChatGPT payload: {json.dumps(payload, indent=4)}")
+    debug(f"# ChatGPT payload: {json.dumps(payload, indent=4, ensure_ascii=False)}")
 
     try:
         response = requests.post('https://api.openai.com/v1/chat/completions', headers=headers, json=payload)
         if response.status_code == 200:
-            debug("# ChatGPT API response received successfully.")
-
+            debug("# Odpowiedź z ChatGPT API otrzymana pomyślnie.")
             return response.json()["choices"][0]["message"]["content"]
         else:
-            debug(f"# ChatGPT API error: {response.status_code}, {response.text}")
+            debug(f"# Błąd ChatGPT API: {response.status_code}, {response.text}")
             return None
     except Exception as e:
-        debug(f"# Error querying ChatGPT API: {e}")
+        debug(f"# Błąd zapytania do ChatGPT API: {e}")
         return None
 
 def send_event(msg):
-    """Send the enriched alert to Wazuh."""
-    string = f'1:chatgpt:{json.dumps(msg)}'
+    """Wysyła wzbogacony alert do Wazuh."""
+    string = f'1:chatgpt:{json.dumps(msg, ensure_ascii=False)}'
 
-    debug(f"# Sending enriched alert: {string}")
+    debug(f"# Wysyłam wzbogacony alert: {string}")
 
     try:
         sock = socket(AF_UNIX, SOCK_DGRAM)
@@ -141,15 +137,12 @@ def send_event(msg):
         sock.send(string.encode())
         sock.close()
     except Exception as e:
-        debug(f"# Error sending enriched alert: {e}")
+        debug(f"# Błąd podczas wysyłania alertu: {e}")
 
 if __name__ == "__main__":
     try:
         debug_enabled = len(sys.argv) > 3 and sys.argv[3] == 'debug'
         main(sys.argv)
     except Exception as e:
-        debug(f"# Exception in main: {e}")
+        debug(f"# Wyjątek w main: {e}")
         raise
-
-
-
